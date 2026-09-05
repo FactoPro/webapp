@@ -9,6 +9,7 @@ const LINKS = [
   { href: '/dashboard', label: 'Tableau de bord' },
   { href: '/clients', label: 'Clients' },
   { href: '/catalogue', label: 'Catalogue' },
+  { href: '/remises', label: 'Remises' },
 ]
 
 export function MainNav() {
