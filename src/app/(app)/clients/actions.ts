@@ -50,3 +50,36 @@ export async function deleteClient(id: string): Promise<ClientActionResult> {
   revalidatePath('/clients')
   return { ok: true }
 }
+
+export type ImportClientsResult = { ok: true; inserted: number } | { ok: false; error: string }
+
+export async function importClients(rows: ClientInput[]): Promise<ImportClientsResult> {
+  const supabase = await createSupabaseClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { ok: false, error: 'Session expirée. Reconnectez-vous.' }
+
+  // Re-validation côté serveur : on n'insère que les lignes valides.
+  const payload = rows
+    .map((row) => clientSchema.safeParse(row))
+    .filter((result) => result.success)
+    .map((result) => ({
+      user_id: user.id,
+      name: result.data.name,
+      type: result.data.type,
+      company_name: nullifyEmpty(result.data.company_name),
+      email: nullifyEmpty(result.data.email),
+      phone: nullifyEmpty(result.data.phone),
+      address: nullifyEmpty(result.data.address),
+      siret: nullifyEmpty(result.data.siret),
+    }))
+
+  if (payload.length === 0) return { ok: false, error: 'Aucune ligne valide à importer.' }
+
+  const { error } = await supabase.from('clients').insert(payload)
+  if (error) return { ok: false, error: "L'import a échoué." }
+
+  revalidatePath('/clients')
+  return { ok: true, inserted: payload.length }
+}
