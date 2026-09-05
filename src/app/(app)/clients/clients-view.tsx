@@ -8,6 +8,7 @@ import type { Tables } from '@/types/database'
 
 import { ClientDialog } from './client-dialog'
 import { columns } from './columns'
+import { ImportClientsDialog } from './import-clients-dialog'
 
 type Client = Tables<'clients'>
 type TypeFilter = 'all' | 'individual' | 'company'
@@ -21,6 +22,7 @@ const FILTERS: { value: TypeFilter; label: string }[] = [
 export function ClientsView({ clients }: { clients: Client[] }) {
   const [typeFilter, setTypeFilter] = React.useState<TypeFilter>('all')
   const [createOpen, setCreateOpen] = React.useState(false)
+  const [importOpen, setImportOpen] = React.useState(false)
 
   const filtered = React.useMemo(
     () => (typeFilter === 'all' ? clients : clients.filter((client) => client.type === typeFilter)),
@@ -36,7 +38,12 @@ export function ClientsView({ clients }: { clients: Client[] }) {
             {clients.length} client{clients.length > 1 ? 's' : ''}
           </p>
         </div>
-        <Button onClick={() => setCreateOpen(true)}>Nouveau client</Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setImportOpen(true)}>
+            Importer CSV
+          </Button>
+          <Button onClick={() => setCreateOpen(true)}>Nouveau client</Button>
+        </div>
       </div>
 
       <DataTable
@@ -61,6 +68,7 @@ export function ClientsView({ clients }: { clients: Client[] }) {
       />
 
       <ClientDialog open={createOpen} onOpenChange={setCreateOpen} />
+      <ImportClientsDialog open={importOpen} onOpenChange={setImportOpen} />
     </div>
   )
 }
