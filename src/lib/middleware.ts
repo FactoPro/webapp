@@ -1,6 +1,17 @@
 import { createServerClient } from '@supabase/ssr'
 import { type NextRequest, NextResponse } from 'next/server'
 
+/** Routes accessibles sans session. */
+const PUBLIC_PATHS = ['/login', '/register', '/reset-password', '/update-password']
+/** Préfixe des routes techniques d'auth (callbacks e-mail, déconnexion). Toujours autorisé. */
+const AUTH_PREFIX = '/auth'
+/** Pages où un utilisateur déjà connecté n'a rien à faire → renvoyé vers le dashboard. */
+const GUEST_ONLY_PATHS = ['/login', '/register', '/reset-password']
+
+function matchesPath(pathname: string, paths: string[]) {
+  return paths.some((path) => pathname === path || pathname.startsWith(`${path}/`))
+}
+
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
     request,
@@ -38,14 +49,20 @@ export async function updateSession(request: NextRequest) {
   const { data } = await supabase.auth.getClaims()
   const user = data?.claims
 
-  if (
-    !user &&
-    !request.nextUrl.pathname.startsWith('/login') &&
-    !request.nextUrl.pathname.startsWith('/auth')
-  ) {
-    // no user, potentially respond by redirecting the user to the login page
+  const { pathname } = request.nextUrl
+  const isPublic = matchesPath(pathname, PUBLIC_PATHS) || pathname.startsWith(AUTH_PREFIX)
+
+  if (!user && !isPublic) {
     const url = request.nextUrl.clone()
-    url.pathname = '/auth/login'
+    url.pathname = '/login'
+    url.search = ''
+    return NextResponse.redirect(url)
+  }
+
+  if (user && matchesPath(pathname, GUEST_ONLY_PATHS)) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/dashboard'
+    url.search = ''
     return NextResponse.redirect(url)
   }
 
