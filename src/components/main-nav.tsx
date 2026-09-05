@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils'
 const LINKS = [
   { href: '/dashboard', label: 'Tableau de bord' },
   { href: '/clients', label: 'Clients' },
+  { href: '/catalogue', label: 'Catalogue' },
 ]
 
 export function MainNav() {
