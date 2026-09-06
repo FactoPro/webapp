@@ -1,6 +1,7 @@
 'use client'
 
 import { type ColumnDef } from '@tanstack/react-table'
+import Link from 'next/link'
 
 import { Badge } from '@/components/ui/badge'
 import { CLIENT_TYPE_LABELS } from '@/lib/validations/client'
@@ -14,7 +15,14 @@ export const columns: ColumnDef<Client>[] = [
   {
     accessorKey: 'name',
     header: 'Nom',
-    cell: ({ row }) => <span className="font-medium">{row.original.name}</span>,
+    cell: ({ row }) => (
+      <Link
+        href={`/clients/${row.original.id}`}
+        className="font-medium underline-offset-4 hover:underline"
+      >
+        {row.original.name}
+      </Link>
+    ),
   },
   {
     accessorKey: 'type',
