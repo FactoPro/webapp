@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { type ProfileInput, profileSchema } from '@/lib/validations/profile'
+import { formatReminderDays, type ProfileInput, profileSchema } from '@/lib/validations/profile'
 import type { Tables } from '@/types/database'
 
 import { updateProfile } from './actions'
@@ -43,8 +43,20 @@ function toFormValues(profile: Profile): ProfileInput {
     logo_url: profile.logo_url ?? '',
     default_vat_rate: String(profile.default_vat_rate ?? '20'),
     payment_terms: String(profile.payment_terms ?? '30'),
+    micro_enterprise: profile.micro_enterprise ?? true,
+    urssaf_period: (profile.urssaf_period as ProfileInput['urssaf_period']) ?? 'monthly',
+    urssaf_rate: String(profile.urssaf_rate ?? '21.2'),
+    versement_liberatoire: profile.versement_liberatoire ?? false,
+    income_tax_rate: String(profile.income_tax_rate ?? '1.7'),
+    reminder_days: formatReminderDays(profile.reminder_days) || '7, 14, 30',
+    reminder_repeat_days: String(profile.reminder_repeat_days ?? '30'),
   }
 }
+
+const YES_NO = [
+  { value: true, label: 'Oui' },
+  { value: false, label: 'Non' },
+]
 
 export function SettingsForm({ profile, userId }: { profile: Profile; userId: string }) {
   const [isPending, startTransition] = React.useTransition()
@@ -305,6 +317,160 @@ export function SettingsForm({ profile, userId }: { profile: Profile; userId: st
                       <Input inputMode="numeric" {...field} />
                     </FormControl>
                     <FormDescription>0 = paiement à réception.</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Régime micro-entreprise / URSSAF</CardTitle>
+              <CardDescription>
+                Utilisé par le futur module de calcul des cotisations.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-4 sm:grid-cols-2">
+              <FormField
+                control={form.control}
+                name="micro_enterprise"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Micro-entreprise</FormLabel>
+                    <div className="flex gap-2">
+                      {YES_NO.map((option) => (
+                        <Button
+                          key={option.label}
+                          type="button"
+                          size="sm"
+                          variant={field.value === option.value ? 'default' : 'outline'}
+                          onClick={() => field.onChange(option.value)}
+                        >
+                          {option.label}
+                        </Button>
+                      ))}
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="urssaf_period"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Périodicité de déclaration</FormLabel>
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={field.value === 'monthly' ? 'default' : 'outline'}
+                        onClick={() => field.onChange('monthly')}
+                      >
+                        Mensuelle
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={field.value === 'quarterly' ? 'default' : 'outline'}
+                        onClick={() => field.onChange('quarterly')}
+                      >
+                        Trimestrielle
+                      </Button>
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="urssaf_rate"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Taux de cotisations URSSAF (%)</FormLabel>
+                    <FormControl>
+                      <Input inputMode="decimal" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="income_tax_rate"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Taux d&apos;impôt sur le revenu (%)</FormLabel>
+                    <FormControl>
+                      <Input inputMode="decimal" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="versement_liberatoire"
+                render={({ field }) => (
+                  <FormItem className="sm:col-span-2">
+                    <FormLabel>Versement libératoire de l&apos;impôt sur le revenu</FormLabel>
+                    <div className="flex gap-2">
+                      {YES_NO.map((option) => (
+                        <Button
+                          key={option.label}
+                          type="button"
+                          size="sm"
+                          variant={field.value === option.value ? 'default' : 'outline'}
+                          onClick={() => field.onChange(option.value)}
+                        >
+                          {option.label}
+                        </Button>
+                      ))}
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Relances de paiement</CardTitle>
+              <CardDescription>
+                Jours après échéance où une relance est proposée pour les factures impayées.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-4 sm:grid-cols-2">
+              <FormField
+                control={form.control}
+                name="reminder_days"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Jours de relance</FormLabel>
+                    <FormControl>
+                      <Input placeholder="7, 14, 30" {...field} />
+                    </FormControl>
+                    <FormDescription>
+                      Liste d&apos;entiers séparés par des virgules. Vide = aucune relance.
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="reminder_repeat_days"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Répétition (jours)</FormLabel>
+                    <FormControl>
+                      <Input inputMode="numeric" {...field} />
+                    </FormControl>
+                    <FormDescription>
+                      0 = pas de répétition après la dernière relance.
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}

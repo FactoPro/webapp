@@ -6,6 +6,7 @@ import { createClient as createSupabaseClient } from '@/lib/server'
 import {
   normalizeIban,
   parseAmount,
+  parseReminderDays,
   type ProfileInput,
   profileSchema,
 } from '@/lib/validations/profile'
@@ -44,6 +45,13 @@ export async function updateProfile(values: ProfileInput): Promise<ProfileAction
       logo_url: nullifyEmpty(d.logo_url),
       default_vat_rate: parseAmount(d.default_vat_rate),
       payment_terms: Number.parseInt(d.payment_terms, 10),
+      micro_enterprise: d.micro_enterprise,
+      urssaf_period: d.urssaf_period,
+      urssaf_rate: parseAmount(d.urssaf_rate),
+      versement_liberatoire: d.versement_liberatoire,
+      income_tax_rate: parseAmount(d.income_tax_rate),
+      reminder_days: parseReminderDays(d.reminder_days) ?? [],
+      reminder_repeat_days: Number.parseInt(d.reminder_repeat_days, 10),
     })
     .eq('id', user.id)
 
