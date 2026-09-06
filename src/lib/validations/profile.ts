@@ -45,10 +45,63 @@ export const profileSchema = z.object({
     .trim()
     .min(1, 'Délai de paiement requis')
     .refine((v) => /^\d+$/.test(v) && Number(v) <= 365, 'Délai en jours invalide'),
+
+  // Régime micro-entreprise / URSSAF (FAC-14)
+  micro_enterprise: z.boolean(),
+  urssaf_period: z.enum(['monthly', 'quarterly']),
+  urssaf_rate: numericString('Taux URSSAF').refine(
+    (v) => parseAmount(v) <= 100,
+    'Taux URSSAF invalide'
+  ),
+  versement_liberatoire: z.boolean(),
+  income_tax_rate: numericString("Taux d'impôt").refine(
+    (v) => parseAmount(v) <= 100,
+    "Taux d'impôt invalide"
+  ),
+
+  // Relances (FAC-15)
+  reminder_days: z
+    .string()
+    .trim()
+    .refine((v) => parseReminderDays(v) !== null, 'Liste de jours invalide (entiers positifs)'),
+  reminder_repeat_days: z
+    .string()
+    .trim()
+    .min(1, 'Valeur requise (0 = désactivé)')
+    .refine((v) => /^\d+$/.test(v) && Number(v) <= 365, 'Nombre de jours invalide'),
 })
 
 export type ProfileInput = z.infer<typeof profileSchema>
 
 export function normalizeIban(value: string): string {
   return stripSpaces(value).toUpperCase()
+}
+
+export const URSSAF_PERIOD_LABELS: Record<ProfileInput['urssaf_period'], string> = {
+  monthly: 'Mensuelle',
+  quarterly: 'Trimestrielle',
+}
+
+/**
+ * Parse une saisie « 7, 14, 30 » en tableau d'entiers positifs, triés et
+ * dédupliqués. Renvoie `null` si une valeur est invalide (mais accepte le
+ * vide → `[]`).
+ */
+export function parseReminderDays(value: string): number[] | null {
+  const parts = value
+    .split(/[,;\s]+/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+  const days: number[] = []
+  for (const part of parts) {
+    if (!/^\d+$/.test(part)) return null
+    const day = Number(part)
+    if (day < 1 || day > 365) return null
+    if (!days.includes(day)) days.push(day)
+  }
+  return days.sort((a, b) => a - b)
+}
+
+export function formatReminderDays(days: unknown): string {
+  return Array.isArray(days) ? days.join(', ') : ''
 }
