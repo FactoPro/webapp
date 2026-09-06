@@ -1,14 +1,12 @@
-import { ModeToggle } from '@/components/mode-toggle'
-import { Button } from '@/components/ui/button'
+import { redirect } from 'next/navigation'
 
-export default function Home() {
-  return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-6 bg-background text-foreground">
-      <h1 className="text-2xl font-semibold">FactoPro</h1>
-      <div className="flex items-center gap-4">
-        <Button>Nouveau devis</Button>
-        <ModeToggle />
-      </div>
-    </div>
-  )
+import { createClient } from '@/lib/server'
+
+export default async function Home() {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  redirect(user ? '/dashboard' : '/login')
 }
