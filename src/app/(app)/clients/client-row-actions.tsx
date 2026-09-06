@@ -1,6 +1,7 @@
 'use client'
 
 import { MoreHorizontal } from 'lucide-react'
+import Link from 'next/link'
 import * as React from 'react'
 import { toast } from 'sonner'
 
@@ -52,6 +53,9 @@ export function ClientRowActions({ client }: { client: Client }) {
           <MoreHorizontal />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
+          <DropdownMenuItem render={<Link href={`/clients/${client.id}`} />}>
+            Voir la fiche
+          </DropdownMenuItem>
           <DropdownMenuItem onClick={() => setEditOpen(true)}>Modifier</DropdownMenuItem>
           <DropdownMenuItem variant="destructive" onClick={() => setDeleteOpen(true)}>
             Supprimer
