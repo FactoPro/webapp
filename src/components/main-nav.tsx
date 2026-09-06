@@ -10,6 +10,7 @@ const LINKS = [
   { href: '/clients', label: 'Clients' },
   { href: '/catalogue', label: 'Catalogue' },
   { href: '/remises', label: 'Remises' },
+  { href: '/settings', label: 'Paramètres' },
 ]
 
 export function MainNav() {
