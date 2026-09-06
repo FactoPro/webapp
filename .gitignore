@@ -36,3 +36,6 @@ yarn-error.log*
 # IDE
 /.idea/
 .vscode/*
+
+# Claude Code (local dev tooling)
+/.claude/launch.json
