@@ -2,7 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { type NextRequest, NextResponse } from 'next/server'
 
 /** Routes accessibles sans session. */
-const PUBLIC_PATHS = ['/login', '/register', '/reset-password', '/update-password']
+const PUBLIC_PATHS = ['/login', '/register', '/reset-password', '/update-password', '/devis/public']
 /** Préfixe des routes techniques d'auth (callbacks e-mail, déconnexion). Toujours autorisé. */
 const AUTH_PREFIX = '/auth'
 /** Pages où un utilisateur déjà connecté n'a rien à faire → renvoyé vers le dashboard. */
