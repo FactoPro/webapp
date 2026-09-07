@@ -820,7 +820,17 @@ export type Database = {
         Returns: {
           description: string
           discount_amount: number
+          discount_label: string
           id: string
+          issuer_address: string
+          issuer_bic: string
+          issuer_iban: string
+          issuer_legal_mentions: string
+          issuer_logo_url: string
+          issuer_name: string
+          issuer_pdf_color: string
+          issuer_siret: string
+          issuer_vat_number: string
           items: Json
           notes: string
           number: string
@@ -838,6 +848,7 @@ export type Database = {
         Args: { p_doc_type: string; p_prefix: string }
         Returns: string
       }
+      refuse_public_quote: { Args: { p_token: string }; Returns: undefined }
     }
     Enums: {
       [_ in never]: never

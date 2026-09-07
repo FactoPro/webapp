@@ -26,6 +26,7 @@ import type { Tables } from '@/types/database'
 
 import { revertQuoteToDraft, saveQuote, sendQuote } from './actions'
 import { LineItemsEditor } from './line-items-editor'
+import { PublicLink } from './public-link'
 import { QuoteTotals } from './quote-totals'
 
 type Quote = Tables<'quotes'>
@@ -240,20 +241,22 @@ export function QuoteEditor({ quote, clients, catalogItems, discounts }: QuoteEd
           </div>
 
           {isEdit && !editable && (
-            <div className="rounded-lg border bg-muted/40 p-3 text-sm text-muted-foreground">
-              {status === 'sent' && (
-                <>
-                  Devis envoyé{quote?.sent_at ? ` le ${formatDate(quote.sent_at)}` : ''}.
-                  Repassez-le en brouillon pour le modifier.
-                </>
+            <div className="flex flex-col gap-3 rounded-lg border bg-muted/40 p-3 text-sm text-muted-foreground">
+              <p>
+                {status === 'sent' &&
+                  `Devis envoyé${quote?.sent_at ? ` le ${formatDate(quote.sent_at)}` : ''}. Repassez-le en brouillon pour le modifier.`}
+                {status === 'expired' &&
+                  'Devis expiré (validité dépassée). Repassez-le en brouillon pour le retravailler.'}
+                {status === 'accepted' &&
+                  `Devis accepté par le client${quote?.signature_name ? ` (${quote.signature_name})` : ''} — non modifiable.`}
+                {status === 'refused' && 'Devis refusé par le client — non modifiable.'}
+              </p>
+              {(status === 'sent' || status === 'expired') && quote && (
+                <div>
+                  <p className="mb-1 font-medium text-foreground">Lien à envoyer au client</p>
+                  <PublicLink token={quote.public_token} />
+                </div>
               )}
-              {status === 'expired' && (
-                <>
-                  Devis expiré (validité dépassée). Repassez-le en brouillon pour le retravailler.
-                </>
-              )}
-              {status === 'accepted' && <>Devis accepté par le client — non modifiable.</>}
-              {status === 'refused' && <>Devis refusé par le client — non modifiable.</>}
             </div>
           )}
 
