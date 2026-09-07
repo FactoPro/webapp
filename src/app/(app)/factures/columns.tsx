@@ -91,7 +91,11 @@ export const columns: ColumnDef<InvoiceListRow>[] = [
         <InvoiceRowActions
           id={row.original.id}
           label={row.original.number ?? 'ce brouillon'}
-          canDelete={row.original.status !== 'paid' && row.original.status !== 'partial'}
+          canDelete={
+            !row.original.number &&
+            row.original.status !== 'paid' &&
+            row.original.status !== 'partial'
+          }
         />
       </div>
     ),
