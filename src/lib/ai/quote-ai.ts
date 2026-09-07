@@ -39,19 +39,46 @@ function model(): string {
   return process.env.AI_MODEL || DEFAULT_MODEL
 }
 
+/** Traduit une erreur du SDK Anthropic en message clair pour l'artisan. */
+export class AiError extends Error {}
+
+function toAiError(error: unknown, fallback: string): AiError {
+  if (error instanceof Anthropic.APIError) {
+    if (error.status === 401) return new AiError('Clé API Anthropic invalide.')
+    if (error.status === 429)
+      return new AiError('Assistant IA momentanément saturé, réessayez dans un instant.')
+    if (error.status === 400 && /credit balance is too low/i.test(error.message)) {
+      return new AiError("Crédit Anthropic épuisé — rechargez le compte pour utiliser l'assistant.")
+    }
+    if (error.status === 404)
+      return new AiError(`Modèle IA "${model()}" introuvable — vérifiez AI_MODEL.`)
+    if (error.status >= 500) return new AiError('Service IA indisponible, réessayez plus tard.')
+    return new AiError(fallback)
+  }
+  return new AiError(fallback)
+}
+
 /** Transforme une description libre de travaux en devis structuré. */
 export async function parseQuote(text: string): Promise<ParsedQuote> {
-  const message = await client().messages.parse({
-    model: model(),
-    max_tokens: 4096,
-    system: SYSTEM_PROMPT,
-    messages: [
-      { role: 'user', content: `Description des travaux :\n${text}\n\nGénère le devis structuré.` },
-    ],
-    output_config: { format: zodOutputFormat(parsedQuoteSchema) },
-  })
+  let message
+  try {
+    message = await client().messages.parse({
+      model: model(),
+      max_tokens: 4096,
+      system: SYSTEM_PROMPT,
+      messages: [
+        {
+          role: 'user',
+          content: `Description des travaux :\n${text}\n\nGénère le devis structuré.`,
+        },
+      ],
+      output_config: { format: zodOutputFormat(parsedQuoteSchema) },
+    })
+  } catch (error) {
+    throw toAiError(error, 'La génération du devis a échoué, réessayez.')
+  }
   if (!message.parsed_output) {
-    throw new Error('La génération du devis a échoué, réessayez.')
+    throw new AiError('La génération du devis a échoué, réessayez.')
   }
   return message.parsed_output
 }
@@ -62,23 +89,28 @@ export async function suggestItems(
   trade?: string | null
 ): Promise<SuggestedItems> {
   const tradeHint = trade ? `Métier : ${trade}.\n` : ''
-  const message = await client().messages.parse({
-    model: model(),
-    max_tokens: 2048,
-    system: SYSTEM_PROMPT,
-    messages: [
-      {
-        role: 'user',
-        content:
-          `${tradeHint}Devis en cours :\n${context}\n\n` +
-          'Suggère 3 à 5 lignes complémentaires souvent oubliées ' +
-          '(préparation, protection, évacuation, finitions…).',
-      },
-    ],
-    output_config: { format: zodOutputFormat(suggestedItemsSchema) },
-  })
+  let message
+  try {
+    message = await client().messages.parse({
+      model: model(),
+      max_tokens: 2048,
+      system: SYSTEM_PROMPT,
+      messages: [
+        {
+          role: 'user',
+          content:
+            `${tradeHint}Devis en cours :\n${context}\n\n` +
+            'Suggère 3 à 5 lignes complémentaires souvent oubliées ' +
+            '(préparation, protection, évacuation, finitions…).',
+        },
+      ],
+      output_config: { format: zodOutputFormat(suggestedItemsSchema) },
+    })
+  } catch (error) {
+    throw toAiError(error, 'La suggestion a échoué, réessayez.')
+  }
   if (!message.parsed_output) {
-    throw new Error('La suggestion a échoué, réessayez.')
+    throw new AiError('La suggestion a échoué, réessayez.')
   }
   return message.parsed_output
 }
