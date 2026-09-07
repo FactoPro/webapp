@@ -25,6 +25,7 @@ import { type QuoteInput, quoteSchema } from '@/lib/validations/quote'
 import type { Tables } from '@/types/database'
 
 import { convertQuoteToInvoice } from '../factures/actions'
+import { DepositInvoiceButton } from '../factures/deposit-invoice-button'
 import { regenerateQuotePdf, revertQuoteToDraft, saveQuote, sendQuote } from './actions'
 import { LineItemsEditor } from './line-items-editor'
 import { PublicLink } from './public-link'
@@ -249,6 +250,9 @@ export function QuoteEditor({ quote, clients, catalogItems, discounts }: QuoteEd
                 >
                   Repasser en brouillon
                 </Button>
+              )}
+              {isEdit && (status === 'sent' || status === 'accepted') && (
+                <DepositInvoiceButton quoteId={quote!.id} />
               )}
               {isEdit && status === 'accepted' && (
                 <Button type="button" disabled={isPending} onClick={convertToInvoice}>
