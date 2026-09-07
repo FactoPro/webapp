@@ -339,6 +339,9 @@ export type Database = {
           deposit_deducted: number | null
           deposit_reference: string | null
           discount_amount: number
+          discount_kind: string | null
+          discount_label: string | null
+          discount_value: number | null
           due_date: string | null
           id: string
           items: Json
@@ -358,6 +361,7 @@ export type Database = {
           subtotal: number
           title: string | null
           total: number
+          updated_at: string
           user_id: string
           vat_amount: number
         }
@@ -368,6 +372,9 @@ export type Database = {
           deposit_deducted?: number | null
           deposit_reference?: string | null
           discount_amount?: number
+          discount_kind?: string | null
+          discount_label?: string | null
+          discount_value?: number | null
           due_date?: string | null
           id?: string
           items?: Json
@@ -387,6 +394,7 @@ export type Database = {
           subtotal?: number
           title?: string | null
           total?: number
+          updated_at?: string
           user_id: string
           vat_amount?: number
         }
@@ -397,6 +405,9 @@ export type Database = {
           deposit_deducted?: number | null
           deposit_reference?: string | null
           discount_amount?: number
+          discount_kind?: string | null
+          discount_label?: string | null
+          discount_value?: number | null
           due_date?: string | null
           id?: string
           items?: Json
@@ -416,6 +427,7 @@ export type Database = {
           subtotal?: number
           title?: string | null
           total?: number
+          updated_at?: string
           user_id?: string
           vat_amount?: number
         }

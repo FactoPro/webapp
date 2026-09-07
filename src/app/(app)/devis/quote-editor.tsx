@@ -24,6 +24,7 @@ import {
 import { type QuoteInput, quoteSchema } from '@/lib/validations/quote'
 import type { Tables } from '@/types/database'
 
+import { convertQuoteToInvoice } from '../factures/actions'
 import { regenerateQuotePdf, revertQuoteToDraft, saveQuote, sendQuote } from './actions'
 import { LineItemsEditor } from './line-items-editor'
 import { PublicLink } from './public-link'
@@ -171,6 +172,18 @@ export function QuoteEditor({ quote, clients, catalogItems, discounts }: QuoteEd
       return { kind: null, value: null, label: '' }
     }, [discountMode, discountPresetId, discountKind, discountValue, discounts])
 
+  function convertToInvoice() {
+    startTransition(async () => {
+      const result = await convertQuoteToInvoice(quote!.id)
+      if (!result.ok) {
+        toast.error(result.error)
+        return
+      }
+      toast.success('Facture créée (brouillon).')
+      router.push(`/factures/${result.id}`)
+    })
+  }
+
   function onSubmit(values: QuoteInput) {
     startTransition(async () => {
       const result = await saveQuote(values, quote?.id)
@@ -235,6 +248,11 @@ export function QuoteEditor({ quote, clients, catalogItems, discounts }: QuoteEd
                   }
                 >
                   Repasser en brouillon
+                </Button>
+              )}
+              {isEdit && status === 'accepted' && (
+                <Button type="button" disabled={isPending} onClick={convertToInvoice}>
+                  Convertir en facture
                 </Button>
               )}
             </div>
