@@ -27,6 +27,7 @@ import type { Tables } from '@/types/database'
 import { regenerateQuotePdf, revertQuoteToDraft, saveQuote, sendQuote } from './actions'
 import { LineItemsEditor } from './line-items-editor'
 import { PublicLink } from './public-link'
+import { QuoteAiAssist } from './quote-ai-assist'
 import { QuoteTotals } from './quote-totals'
 
 type Quote = Tables<'quotes'>
@@ -203,14 +204,6 @@ export function QuoteEditor({ quote, clients, catalogItems, discounts }: QuoteEd
             <div className="flex gap-2">
               {editable && (
                 <>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled
-                    title="Bientôt disponible (FAC-21)"
-                  >
-                    Générer avec l&apos;IA
-                  </Button>
                   <Button type="submit" disabled={isPending}>
                     {isPending ? 'Enregistrement…' : isEdit ? 'Enregistrer' : 'Créer le devis'}
                   </Button>
@@ -285,6 +278,8 @@ export function QuoteEditor({ quote, clients, catalogItems, discounts }: QuoteEd
               </div>
             </div>
           )}
+
+          {editable && <QuoteAiAssist />}
 
           <fieldset disabled={!editable} className="flex flex-col gap-6 disabled:opacity-70">
             <Card>
