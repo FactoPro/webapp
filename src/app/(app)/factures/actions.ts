@@ -77,16 +77,63 @@ export async function convertQuoteToInvoice(quoteId: string): Promise<InvoiceAct
   return { ok: true, id: inserted.id }
 }
 
+/**
+ * Finalise une facture `draft` → `sent` en lui attribuant son numéro légal
+ * séquentiel `FAC-AAAA-NNN` (FAC-31). Le numéro est attribué une seule fois,
+ * de façon atomique côté Postgres (`next_document_number`), et n'est jamais
+ * réattribué : une facture numérotée ne peut plus être supprimée, seulement
+ * annulée par un avoir (FAC-30).
+ */
+export async function markInvoiceSent(id: string): Promise<InvoiceActionResult> {
+  const supabase = await createSupabaseClient()
+  const { data: invoice } = await supabase
+    .from('invoices')
+    .select('id, status, number, kind')
+    .eq('id', id)
+    .maybeSingle()
+  if (!invoice) return { ok: false, error: 'Facture introuvable.' }
+  if (invoice.status !== 'draft') {
+    return { ok: false, error: 'Seule une facture en brouillon peut être finalisée.' }
+  }
+
+  let number = invoice.number
+  if (!number) {
+    const isCredit = invoice.kind === 'credit_note'
+    const { data: generated, error: numError } = await supabase.rpc('next_document_number', {
+      p_doc_type: isCredit ? 'credit_note' : 'invoice',
+      p_prefix: isCredit ? 'AV' : 'FAC',
+    })
+    if (numError || !generated) return { ok: false, error: 'La numérotation a échoué.' }
+    number = generated
+  }
+
+  const { error } = await supabase
+    .from('invoices')
+    .update({ status: 'sent', number, sent_at: new Date().toISOString() })
+    .eq('id', id)
+  if (error) return { ok: false, error: 'La finalisation a échoué.' }
+
+  revalidatePath('/factures')
+  revalidatePath(`/factures/${id}`)
+  return { ok: true, id }
+}
+
 export async function deleteInvoice(
   id: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const supabase = await createSupabaseClient()
   const { data: invoice } = await supabase
     .from('invoices')
-    .select('status')
+    .select('status, number')
     .eq('id', id)
     .maybeSingle()
   if (!invoice) return { ok: false, error: 'Facture introuvable.' }
+  if (invoice.number) {
+    return {
+      ok: false,
+      error: 'Une facture numérotée ne peut pas être supprimée — créez un avoir pour l’annuler.',
+    }
+  }
   if (invoice.status === 'paid' || invoice.status === 'partial') {
     return {
       ok: false,

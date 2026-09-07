@@ -15,6 +15,7 @@ import {
 import { createClient } from '@/lib/server'
 
 import { InvoiceRowActions } from '../invoice-row-actions'
+import { InvoiceStatusActions } from '../invoice-status-actions'
 
 interface InvoiceLine {
   label: string
@@ -78,6 +79,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
           <Badge variant={INVOICE_STATUS_VARIANTS[status]}>{INVOICE_STATUS_LABELS[status]}</Badge>
         </div>
         <div className="flex items-center gap-2">
+          <InvoiceStatusActions id={invoice.id} status={invoice.status} />
           <Button
             variant="outline"
             size="sm"
@@ -89,11 +91,28 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
           <InvoiceRowActions
             id={invoice.id}
             label={invoice.number ?? 'ce brouillon'}
-            canDelete={invoice.status !== 'paid' && invoice.status !== 'partial'}
+            canDelete={!invoice.number && invoice.status !== 'paid' && invoice.status !== 'partial'}
             redirectOnDelete
           />
         </div>
       </div>
+
+      {invoice.status === 'draft' && (
+        <p className="rounded-lg border bg-muted/40 p-3 text-sm text-muted-foreground">
+          Brouillon — le numéro légal{' '}
+          <span className="font-medium">
+            {invoice.kind === 'credit_note' ? 'AV' : 'FAC'}-{new Date().getFullYear()}-NNN
+          </span>{' '}
+          sera attribué à la finalisation (« Marquer comme envoyée »). Un brouillon peut encore être
+          supprimé.
+        </p>
+      )}
+      {invoice.status !== 'draft' && invoice.sent_at && (
+        <p className="text-sm text-muted-foreground">
+          {kindLabel} finalisé{invoice.kind === 'credit_note' ? '' : 'e'} le{' '}
+          {formatDate(invoice.sent_at)}.
+        </p>
+      )}
 
       <div className="grid gap-4 rounded-xl border p-4 text-sm sm:grid-cols-2">
         <div>
