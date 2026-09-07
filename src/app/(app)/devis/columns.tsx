@@ -5,6 +5,7 @@ import Link from 'next/link'
 
 import { Badge } from '@/components/ui/badge'
 import { formatCurrency, formatDate } from '@/lib/format'
+import { effectiveStatus, QUOTE_STATUS_LABELS, QUOTE_STATUS_VARIANTS } from '@/lib/quote-status'
 
 import { QuoteRowActions } from './quote-row-actions'
 
@@ -18,15 +19,6 @@ export interface QuoteListRow {
   created_at: string
   clientName: string | null
 }
-
-const STATUS: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' }> =
-  {
-    draft: { label: 'Brouillon', variant: 'secondary' },
-    sent: { label: 'Envoyé', variant: 'default' },
-    accepted: { label: 'Accepté', variant: 'default' },
-    refused: { label: 'Refusé', variant: 'destructive' },
-    expired: { label: 'Expiré', variant: 'secondary' },
-  }
 
 export const columns: ColumnDef<QuoteListRow>[] = [
   {
@@ -55,11 +47,8 @@ export const columns: ColumnDef<QuoteListRow>[] = [
     accessorKey: 'status',
     header: 'Statut',
     cell: ({ row }) => {
-      const s = STATUS[row.original.status] ?? {
-        label: row.original.status,
-        variant: 'secondary' as const,
-      }
-      return <Badge variant={s.variant}>{s.label}</Badge>
+      const s = effectiveStatus(row.original.status, row.original.valid_until)
+      return <Badge variant={QUOTE_STATUS_VARIANTS[s]}>{QUOTE_STATUS_LABELS[s]}</Badge>
     },
   },
   {

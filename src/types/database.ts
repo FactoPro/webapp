@@ -204,6 +204,35 @@ export type Database = {
           },
         ]
       }
+      document_counters: {
+        Row: {
+          doc_type: string
+          last_seq: number
+          user_id: string
+          year: number
+        }
+        Insert: {
+          doc_type: string
+          last_seq?: number
+          user_id: string
+          year: number
+        }
+        Update: {
+          doc_type?: string
+          last_seq?: number
+          user_id?: string
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'document_counters_user_id_fkey'
+            columns: ['user_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       email_accounts: {
         Row: {
           access_token: string | null
@@ -804,6 +833,10 @@ export type Database = {
           valid_until: string
           vat_amount: number
         }[]
+      }
+      next_document_number: {
+        Args: { p_doc_type: string; p_prefix: string }
+        Returns: string
       }
     }
     Enums: {
