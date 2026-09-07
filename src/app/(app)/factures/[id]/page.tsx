@@ -79,7 +79,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
           <Badge variant={INVOICE_STATUS_VARIANTS[status]}>{INVOICE_STATUS_LABELS[status]}</Badge>
         </div>
         <div className="flex items-center gap-2">
-          <InvoiceStatusActions id={invoice.id} status={invoice.status} />
+          <InvoiceStatusActions id={invoice.id} status={invoice.status} pdfUrl={invoice.pdf_url} />
           <Button
             variant="outline"
             size="sm"
