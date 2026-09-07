@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 
 import { computeTotals } from '@/lib/calculations'
+import { canTransition } from '@/lib/quote-status'
 import { createClient as createSupabaseClient } from '@/lib/server'
 import { parseAmount, type QuoteInput, quoteSchema, resolveDiscount } from '@/lib/validations/quote'
 
@@ -52,6 +53,17 @@ export async function saveQuote(values: QuoteInput, id?: string): Promise<QuoteA
   }
 
   if (id) {
+    const { data: existing } = await supabase
+      .from('quotes')
+      .select('status')
+      .eq('id', id)
+      .maybeSingle()
+    if (existing && existing.status !== 'draft') {
+      return {
+        ok: false,
+        error: 'Ce devis a été envoyé. Repassez-le en brouillon pour le modifier.',
+      }
+    }
     const { error } = await supabase.from('quotes').update(row).eq('id', id)
     if (error) return { ok: false, error: "L'enregistrement a échoué." }
     revalidatePath('/devis')
@@ -78,4 +90,84 @@ export async function deleteQuote(
   if (error) return { ok: false, error: 'La suppression a échoué.' }
   revalidatePath('/devis')
   return { ok: true }
+}
+
+/**
+ * draft → sent : attribue le numéro DEV-YYYY-NNN (FAC-24) puis passe le devis
+ * en `sent`. La génération PDF + l'envoi email seront branchés ici (FAC-27).
+ */
+export async function sendQuote(id: string): Promise<QuoteActionResult> {
+  const supabase = await createSupabaseClient()
+  const { data: quote } = await supabase
+    .from('quotes')
+    .select('id, status, number, client_id')
+    .eq('id', id)
+    .maybeSingle()
+  if (!quote) return { ok: false, error: 'Devis introuvable.' }
+  if (!canTransition(quote.status, 'sent')) {
+    return { ok: false, error: 'Seul un brouillon peut être envoyé.' }
+  }
+  if (!quote.client_id) return { ok: false, error: 'Sélectionnez un client avant d’envoyer.' }
+
+  let number = quote.number
+  if (!number) {
+    const { data: generated, error: numError } = await supabase.rpc('next_document_number', {
+      p_doc_type: 'quote',
+      p_prefix: 'DEV',
+    })
+    if (numError || !generated) return { ok: false, error: 'La numérotation a échoué.' }
+    number = generated
+  }
+
+  const { error } = await supabase
+    .from('quotes')
+    .update({ status: 'sent', number, sent_at: new Date().toISOString() })
+    .eq('id', id)
+  if (error) return { ok: false, error: "L'envoi a échoué." }
+
+  // TODO (FAC-27) : génération du PDF + envoi de l'email au client ici.
+
+  revalidatePath('/devis')
+  revalidatePath(`/devis/${id}`)
+  return { ok: true, id }
+}
+
+/** sent | expired → draft : « repasser en brouillon » pour retravailler le devis. */
+export async function revertQuoteToDraft(id: string): Promise<QuoteActionResult> {
+  const supabase = await createSupabaseClient()
+  const { data: quote } = await supabase.from('quotes').select('status').eq('id', id).maybeSingle()
+  if (!quote) return { ok: false, error: 'Devis introuvable.' }
+  if (!canTransition(quote.status, 'draft')) {
+    return { ok: false, error: 'Transition non autorisée.' }
+  }
+
+  const { error } = await supabase
+    .from('quotes')
+    .update({ status: 'draft', sent_at: null })
+    .eq('id', id)
+  if (error) return { ok: false, error: 'Échec de la mise à jour.' }
+
+  revalidatePath('/devis')
+  revalidatePath(`/devis/${id}`)
+  return { ok: true, id }
+}
+
+/**
+ * Bascule en `expired` tous les devis `sent` dont la validité est dépassée
+ * (pour l'utilisateur courant). Logique réutilisée par le cron FAC-34.
+ */
+export async function expireOverdueQuotes(): Promise<
+  { ok: true; expired: number } | { ok: false; error: string }
+> {
+  const supabase = await createSupabaseClient()
+  const today = new Date().toISOString().slice(0, 10)
+  const { data, error } = await supabase
+    .from('quotes')
+    .update({ status: 'expired' })
+    .eq('status', 'sent')
+    .lt('valid_until', today)
+    .select('id')
+  if (error) return { ok: false, error: 'Échec de la mise à jour.' }
+  revalidatePath('/devis')
+  return { ok: true, expired: data?.length ?? 0 }
 }

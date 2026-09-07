@@ -6,6 +6,7 @@ import * as React from 'react'
 import { FormProvider, useForm, useWatch } from 'react-hook-form'
 import { toast } from 'sonner'
 
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
@@ -13,10 +14,17 @@ import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
 import { Textarea } from '@/components/ui/textarea'
 import type { DiscountKind } from '@/lib/calculations'
+import { formatDate } from '@/lib/format'
+import {
+  effectiveStatus,
+  isEditable,
+  QUOTE_STATUS_LABELS,
+  QUOTE_STATUS_VARIANTS,
+} from '@/lib/quote-status'
 import { type QuoteInput, quoteSchema } from '@/lib/validations/quote'
 import type { Tables } from '@/types/database'
 
-import { saveQuote } from './actions'
+import { revertQuoteToDraft, saveQuote, sendQuote } from './actions'
 import { LineItemsEditor } from './line-items-editor'
 import { QuoteTotals } from './quote-totals'
 
@@ -114,7 +122,24 @@ interface QuoteEditorProps {
 export function QuoteEditor({ quote, clients, catalogItems, discounts }: QuoteEditorProps) {
   const router = useRouter()
   const isEdit = Boolean(quote)
+  const editable = !quote || isEditable(quote.status)
+  const status = quote ? effectiveStatus(quote.status, quote.valid_until) : null
   const [isPending, startTransition] = React.useTransition()
+
+  function runStatusAction(
+    action: () => Promise<{ ok: boolean; error?: string }>,
+    success: string
+  ) {
+    startTransition(async () => {
+      const result = await action()
+      if (!result.ok) {
+        toast.error(result.error ?? 'Échec.')
+        return
+      }
+      toast.success(success)
+      router.refresh()
+    })
+  }
 
   const form = useForm<QuoteInput>({
     resolver: zodResolver(quoteSchema),
@@ -166,146 +191,91 @@ export function QuoteEditor({ quote, clients, catalogItems, discounts }: QuoteEd
       >
         <div className="flex flex-1 flex-col gap-6">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h1 className="font-heading text-xl font-semibold">
-              {isEdit ? 'Modifier le devis' : 'Nouveau devis'}
-            </h1>
+            <div className="flex items-center gap-3">
+              <h1 className="font-heading text-xl font-semibold">
+                {isEdit ? (quote?.number ?? 'Devis') : 'Nouveau devis'}
+              </h1>
+              {status && (
+                <Badge variant={QUOTE_STATUS_VARIANTS[status]}>{QUOTE_STATUS_LABELS[status]}</Badge>
+              )}
+            </div>
             <div className="flex gap-2">
-              <Button type="button" variant="outline" disabled title="Bientôt disponible (FAC-21)">
-                Générer avec l&apos;IA
-              </Button>
-              <Button type="submit" disabled={isPending}>
-                {isPending ? 'Enregistrement…' : isEdit ? 'Enregistrer' : 'Créer le devis'}
-              </Button>
+              {editable && (
+                <>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled
+                    title="Bientôt disponible (FAC-21)"
+                  >
+                    Générer avec l&apos;IA
+                  </Button>
+                  <Button type="submit" disabled={isPending}>
+                    {isPending ? 'Enregistrement…' : isEdit ? 'Enregistrer' : 'Créer le devis'}
+                  </Button>
+                  {isEdit && (
+                    <Button
+                      type="button"
+                      disabled={isPending}
+                      onClick={() => runStatusAction(() => sendQuote(quote!.id), 'Devis envoyé.')}
+                    >
+                      Envoyer
+                    </Button>
+                  )}
+                </>
+              )}
+              {isEdit && !editable && status !== 'accepted' && status !== 'refused' && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={isPending}
+                  onClick={() =>
+                    runStatusAction(() => revertQuoteToDraft(quote!.id), 'Repassé en brouillon.')
+                  }
+                >
+                  Repasser en brouillon
+                </Button>
+              )}
             </div>
           </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Informations</CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-4 sm:grid-cols-2">
-              <FormField
-                control={form.control}
-                name="client_id"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Client</FormLabel>
-                    <FormControl>
-                      <NativeSelect {...field}>
-                        <option value="">— Sélectionner —</option>
-                        {clients.map((client) => (
-                          <option key={client.id} value={client.id}>
-                            {client.name}
-                            {client.company_name ? ` · ${client.company_name}` : ''}
-                          </option>
-                        ))}
-                      </NativeSelect>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="valid_until"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Valable jusqu&apos;au</FormLabel>
-                    <FormControl>
-                      <Input type="date" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="title"
-                render={({ field }) => (
-                  <FormItem className="sm:col-span-2">
-                    <FormLabel>Titre</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Ex. Rénovation salle de bain" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="description"
-                render={({ field }) => (
-                  <FormItem className="sm:col-span-2">
-                    <FormLabel>Description</FormLabel>
-                    <FormControl>
-                      <Textarea rows={2} {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Prestations</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-4">
-              <LineItemsEditor catalogItems={catalogItems} />
-              {form.formState.errors.items?.message && (
-                <p className="text-sm text-destructive">{form.formState.errors.items.message}</p>
+          {isEdit && !editable && (
+            <div className="rounded-lg border bg-muted/40 p-3 text-sm text-muted-foreground">
+              {status === 'sent' && (
+                <>
+                  Devis envoyé{quote?.sent_at ? ` le ${formatDate(quote.sent_at)}` : ''}.
+                  Repassez-le en brouillon pour le modifier.
+                </>
               )}
-            </CardContent>
-          </Card>
+              {status === 'expired' && (
+                <>
+                  Devis expiré (validité dépassée). Repassez-le en brouillon pour le retravailler.
+                </>
+              )}
+              {status === 'accepted' && <>Devis accepté par le client — non modifiable.</>}
+              {status === 'refused' && <>Devis refusé par le client — non modifiable.</>}
+            </div>
+          )}
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Remise</CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-4">
-              <FormField
-                control={form.control}
-                name="discount_mode"
-                render={({ field }) => (
-                  <FormItem>
-                    <div className="flex flex-wrap gap-2">
-                      {(
-                        [
-                          ['none', 'Aucune'],
-                          ['preset', 'Prédéfinie'],
-                          ['custom', 'Libre'],
-                        ] as const
-                      ).map(([value, label]) => (
-                        <Button
-                          key={value}
-                          type="button"
-                          size="sm"
-                          variant={field.value === value ? 'default' : 'outline'}
-                          onClick={() => field.onChange(value)}
-                          disabled={value === 'preset' && discounts.length === 0}
-                        >
-                          {label}
-                        </Button>
-                      ))}
-                    </div>
-                  </FormItem>
-                )}
-              />
-
-              {discountMode === 'preset' && (
+          <fieldset disabled={!editable} className="flex flex-col gap-6 disabled:opacity-70">
+            <Card>
+              <CardHeader>
+                <CardTitle>Informations</CardTitle>
+              </CardHeader>
+              <CardContent className="grid gap-4 sm:grid-cols-2">
                 <FormField
                   control={form.control}
-                  name="discount_preset_id"
+                  name="client_id"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Remise prédéfinie</FormLabel>
+                      <FormLabel>Client</FormLabel>
                       <FormControl>
                         <NativeSelect {...field}>
-                          <option value="">— Choisir —</option>
-                          {discounts.map((d) => (
-                            <option key={d.id} value={d.id}>
-                              {d.label} ({d.kind === 'fixed' ? `${d.value} €` : `${d.value} %`})
+                          <option value="">— Sélectionner —</option>
+                          {clients.map((client) => (
+                            <option key={client.id} value={client.id}>
+                              {client.name}
+                              {client.company_name ? ` · ${client.company_name}` : ''}
                             </option>
                           ))}
                         </NativeSelect>
@@ -314,76 +284,186 @@ export function QuoteEditor({ quote, clients, catalogItems, discounts }: QuoteEd
                     </FormItem>
                   )}
                 />
-              )}
+                <FormField
+                  control={form.control}
+                  name="valid_until"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Valable jusqu&apos;au</FormLabel>
+                      <FormControl>
+                        <Input type="date" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="title"
+                  render={({ field }) => (
+                    <FormItem className="sm:col-span-2">
+                      <FormLabel>Titre</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Ex. Rénovation salle de bain" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="description"
+                  render={({ field }) => (
+                    <FormItem className="sm:col-span-2">
+                      <FormLabel>Description</FormLabel>
+                      <FormControl>
+                        <Textarea rows={2} {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </CardContent>
+            </Card>
 
-              {discountMode === 'custom' && (
-                <div className="grid gap-4 sm:grid-cols-3">
+            <Card>
+              <CardHeader>
+                <CardTitle>Prestations</CardTitle>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-4">
+                <LineItemsEditor catalogItems={catalogItems} />
+                {form.formState.errors.items?.message && (
+                  <p className="text-sm text-destructive">{form.formState.errors.items.message}</p>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Remise</CardTitle>
+              </CardHeader>
+              <CardContent className="grid gap-4">
+                <FormField
+                  control={form.control}
+                  name="discount_mode"
+                  render={({ field }) => (
+                    <FormItem>
+                      <div className="flex flex-wrap gap-2">
+                        {(
+                          [
+                            ['none', 'Aucune'],
+                            ['preset', 'Prédéfinie'],
+                            ['custom', 'Libre'],
+                          ] as const
+                        ).map(([value, label]) => (
+                          <Button
+                            key={value}
+                            type="button"
+                            size="sm"
+                            variant={field.value === value ? 'default' : 'outline'}
+                            onClick={() => field.onChange(value)}
+                            disabled={value === 'preset' && discounts.length === 0}
+                          >
+                            {label}
+                          </Button>
+                        ))}
+                      </div>
+                    </FormItem>
+                  )}
+                />
+
+                {discountMode === 'preset' && (
                   <FormField
                     control={form.control}
-                    name="discount_kind"
+                    name="discount_preset_id"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Type</FormLabel>
+                        <FormLabel>Remise prédéfinie</FormLabel>
                         <FormControl>
                           <NativeSelect {...field}>
-                            <option value="percent">Pourcentage</option>
-                            <option value="fixed">Montant fixe</option>
+                            <option value="">— Choisir —</option>
+                            {discounts.map((d) => (
+                              <option key={d.id} value={d.id}>
+                                {d.label} ({d.kind === 'fixed' ? `${d.value} €` : `${d.value} %`})
+                              </option>
+                            ))}
                           </NativeSelect>
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="discount_value"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>
-                          {discountKind === 'fixed' ? 'Montant (€)' : 'Pourcentage'}
-                        </FormLabel>
-                        <FormControl>
-                          <Input inputMode="decimal" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                  <FormField
-                    control={form.control}
-                    name="discount_label"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Libellé</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Remise" {...field} />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Notes</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <FormField
-                control={form.control}
-                name="notes"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormControl>
-                      <Textarea rows={3} placeholder="Conditions, précisions…" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
                 )}
-              />
-            </CardContent>
-          </Card>
+
+                {discountMode === 'custom' && (
+                  <div className="grid gap-4 sm:grid-cols-3">
+                    <FormField
+                      control={form.control}
+                      name="discount_kind"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Type</FormLabel>
+                          <FormControl>
+                            <NativeSelect {...field}>
+                              <option value="percent">Pourcentage</option>
+                              <option value="fixed">Montant fixe</option>
+                            </NativeSelect>
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="discount_value"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>
+                            {discountKind === 'fixed' ? 'Montant (€)' : 'Pourcentage'}
+                          </FormLabel>
+                          <FormControl>
+                            <Input inputMode="decimal" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="discount_label"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Libellé</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Remise" {...field} />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Notes</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <FormField
+                  control={form.control}
+                  name="notes"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormControl>
+                        <Textarea rows={3} placeholder="Conditions, précisions…" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </CardContent>
+            </Card>
+          </fieldset>
         </div>
 
         <div className="lg:sticky lg:top-6 lg:w-80">
