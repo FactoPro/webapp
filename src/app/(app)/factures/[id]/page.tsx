@@ -16,6 +16,7 @@ import { createClient } from '@/lib/server'
 
 import { InvoiceRowActions } from '../invoice-row-actions'
 import { InvoiceStatusActions } from '../invoice-status-actions'
+import { PaymentsPanel } from '../payments-panel'
 
 interface InvoiceLine {
   label: string
@@ -42,6 +43,13 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
     .eq('id', id)
     .maybeSingle()
   if (!invoice) notFound()
+
+  const { data: paymentRows } = await supabase
+    .from('payments')
+    .select('id, amount, payment_method, paid_at, notes')
+    .eq('invoice_id', id)
+    .order('paid_at', { ascending: true })
+  const payments = (paymentRows ?? []).map((p) => ({ ...p, amount: Number(p.amount) }))
 
   const lines = (
     Array.isArray(invoice.items) ? (invoice.items as unknown as InvoiceLine[]) : []
@@ -205,6 +213,15 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
 
       {invoice.notes && (
         <p className="whitespace-pre-line text-sm text-muted-foreground">{invoice.notes}</p>
+      )}
+
+      {invoice.kind !== 'credit_note' && invoice.status !== 'draft' && (
+        <PaymentsPanel
+          invoiceId={invoice.id}
+          status={invoice.status}
+          remaining={remaining}
+          payments={payments}
+        />
       )}
     </div>
   )
