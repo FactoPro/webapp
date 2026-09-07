@@ -1,13 +1,38 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { headers } from 'next/headers'
 
 import { computeTotals } from '@/lib/calculations'
+import { sendQuoteToClient } from '@/lib/email/quote-email'
+import { renderAndStoreQuotePdf } from '@/lib/pdf/quote-pdf'
 import { canTransition } from '@/lib/quote-status'
 import { createClient as createSupabaseClient } from '@/lib/server'
 import { parseAmount, type QuoteInput, quoteSchema, resolveDiscount } from '@/lib/validations/quote'
 
 export type QuoteActionResult = { ok: true; id: string } | { ok: false; error: string }
+
+/** Régénère le PDF du devis depuis l'état courant et met à jour `pdf_url` (best-effort). */
+async function refreshQuotePdf(
+  supabase: Awaited<ReturnType<typeof createSupabaseClient>>,
+  quoteId: string
+): Promise<string | null> {
+  const [{ data: quote }, { data: user }] = await Promise.all([
+    supabase.from('quotes').select('*').eq('id', quoteId).maybeSingle(),
+    supabase.auth.getUser(),
+  ])
+  if (!quote || !user.user) return null
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('id', user.user.id)
+    .maybeSingle()
+  if (!profile) return null
+
+  const url = await renderAndStoreQuotePdf(supabase, quote, profile)
+  if (url) await supabase.from('quotes').update({ pdf_url: url }).eq('id', quoteId)
+  return url
+}
 
 export async function saveQuote(values: QuoteInput, id?: string): Promise<QuoteActionResult> {
   const parsed = quoteSchema.safeParse(values)
@@ -92,15 +117,23 @@ export async function deleteQuote(
   return { ok: true }
 }
 
+async function siteOrigin(): Promise<string> {
+  if (process.env.NEXT_PUBLIC_SITE_URL) return process.env.NEXT_PUBLIC_SITE_URL.replace(/\/$/, '')
+  const h = await headers()
+  const host = h.get('x-forwarded-host') ?? h.get('host')
+  const proto = h.get('x-forwarded-proto') ?? 'https'
+  return host ? `${proto}://${host}` : ''
+}
+
 /**
- * draft → sent : attribue le numéro DEV-YYYY-NNN (FAC-24) puis passe le devis
- * en `sent`. La génération PDF + l'envoi email seront branchés ici (FAC-27).
+ * draft → sent : attribue le numéro DEV-YYYY-NNN (FAC-24), passe le devis en
+ * `sent`, génère le PDF et l'envoie au client par email (FAC-27, best-effort).
  */
 export async function sendQuote(id: string): Promise<QuoteActionResult> {
   const supabase = await createSupabaseClient()
   const { data: quote } = await supabase
     .from('quotes')
-    .select('id, status, number, client_id')
+    .select('id, status, number, client_id, public_token, user_id')
     .eq('id', id)
     .maybeSingle()
   if (!quote) return { ok: false, error: 'Devis introuvable.' }
@@ -125,9 +158,49 @@ export async function sendQuote(id: string): Promise<QuoteActionResult> {
     .eq('id', id)
   if (error) return { ok: false, error: "L'envoi a échoué." }
 
-  // TODO (FAC-27) : génération du PDF + envoi de l'email au client ici.
+  // PDF + email : best-effort, ne doivent jamais faire échouer l'envoi.
+  const pdfUrl = await refreshQuotePdf(supabase, id)
+  const [{ data: client }, { data: profile }] = await Promise.all([
+    supabase.from('clients').select('email').eq('id', quote.client_id).maybeSingle(),
+    supabase
+      .from('profiles')
+      .select('company_name, first_name, last_name')
+      .eq('id', quote.user_id)
+      .maybeSingle(),
+  ])
+  if (client?.email) {
+    const issuerName =
+      profile?.company_name ||
+      [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') ||
+      'Votre artisan'
+    await sendQuoteToClient({
+      to: client.email,
+      issuerName,
+      quoteNumber: number,
+      publicUrl: `${await siteOrigin()}/devis/public/${quote.public_token}`,
+      pdfUrl,
+    })
+  }
 
   revalidatePath('/devis')
+  revalidatePath(`/devis/${id}`)
+  return { ok: true, id }
+}
+
+/** Régénère le PDF d'un devis (action artisan explicite). */
+export async function regenerateQuotePdf(id: string): Promise<QuoteActionResult> {
+  const supabase = await createSupabaseClient()
+  const { data: quote } = await supabase
+    .from('quotes')
+    .select('id, status')
+    .eq('id', id)
+    .maybeSingle()
+  if (!quote) return { ok: false, error: 'Devis introuvable.' }
+  if (quote.status === 'draft') {
+    return { ok: false, error: 'Envoyez le devis pour générer son PDF.' }
+  }
+  const url = await refreshQuotePdf(supabase, id)
+  if (!url) return { ok: false, error: 'La génération du PDF a échoué.' }
   revalidatePath(`/devis/${id}`)
   return { ok: true, id }
 }

@@ -173,6 +173,17 @@ export default async function PublicQuotePage({ params }: { params: Promise<{ to
         </p>
       )}
 
+      {quote.pdf_url && (
+        <a
+          href={quote.pdf_url}
+          target="_blank"
+          rel="noreferrer"
+          className="text-sm font-medium underline underline-offset-4"
+        >
+          Télécharger le devis (PDF)
+        </a>
+      )}
+
       <div className="mt-2">
         {pending ? (
           <AcceptRefuseForm token={token} />

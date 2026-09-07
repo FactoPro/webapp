@@ -24,7 +24,7 @@ import {
 import { type QuoteInput, quoteSchema } from '@/lib/validations/quote'
 import type { Tables } from '@/types/database'
 
-import { revertQuoteToDraft, saveQuote, sendQuote } from './actions'
+import { regenerateQuotePdf, revertQuoteToDraft, saveQuote, sendQuote } from './actions'
 import { LineItemsEditor } from './line-items-editor'
 import { PublicLink } from './public-link'
 import { QuoteTotals } from './quote-totals'
@@ -257,6 +257,32 @@ export function QuoteEditor({ quote, clients, catalogItems, discounts }: QuoteEd
                   <PublicLink token={quote.public_token} />
                 </div>
               )}
+              <div className="flex flex-wrap gap-2">
+                {quote?.pdf_url && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    nativeButton={false}
+                    render={
+                      <a href={quote.pdf_url} target="_blank" rel="noreferrer">
+                        Télécharger le PDF
+                      </a>
+                    }
+                  />
+                )}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={isPending}
+                  onClick={() =>
+                    runStatusAction(() => regenerateQuotePdf(quote!.id), 'PDF régénéré.')
+                  }
+                >
+                  Régénérer le PDF
+                </Button>
+              </div>
             </div>
           )}
 

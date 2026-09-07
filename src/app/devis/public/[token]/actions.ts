@@ -29,10 +29,14 @@ export async function acceptPublicQuote(
     p_accepted_ip: (await clientIp()) ?? '',
   })
   if (error) {
-    return { ok: false, error: error.message.includes('not_pending') ? NOT_PENDING : "L'acceptation a échoué." }
+    return {
+      ok: false,
+      error: error.message.includes('not_pending') ? NOT_PENDING : "L'acceptation a échoué.",
+    }
   }
 
-  // TODO (FAC-27) : régénérer le PDF signé et l'envoyer par email (best-effort).
+  // Le PDF signé est régénéré côté artisan (à l'ouverture du devis accepté /
+  // bouton « Régénérer le PDF ») : l'anon ne peut pas écrire dans le Storage.
   // TODO (FAC-45) : publier un événement Realtime pour le dashboard artisan.
   return { ok: true }
 }
