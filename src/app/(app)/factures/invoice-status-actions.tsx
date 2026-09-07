@@ -6,29 +6,67 @@ import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
 
-import { markInvoiceSent } from './actions'
+import { markInvoiceSent, regenerateInvoicePdf } from './actions'
 
-export function InvoiceStatusActions({ id, status }: { id: string; status: string }) {
+interface Props {
+  id: string
+  status: string
+  pdfUrl: string | null
+}
+
+export function InvoiceStatusActions({ id, status, pdfUrl }: Props) {
   const router = useRouter()
   const [isPending, startTransition] = React.useTransition()
 
-  if (status !== 'draft') return null
-
-  function send() {
+  function run(action: () => Promise<{ ok: boolean; error?: string }>, success: string) {
     startTransition(async () => {
-      const result = await markInvoiceSent(id)
+      const result = await action()
       if (!result.ok) {
-        toast.error(result.error)
+        toast.error(result.error ?? 'Échec.')
         return
       }
-      toast.success('Facture finalisée et numérotée.')
+      toast.success(success)
       router.refresh()
     })
   }
 
+  if (status === 'draft') {
+    return (
+      <Button
+        type="button"
+        size="sm"
+        disabled={isPending}
+        onClick={() => run(() => markInvoiceSent(id), 'Facture finalisée et numérotée.')}
+      >
+        {isPending ? 'Finalisation…' : 'Marquer comme envoyée'}
+      </Button>
+    )
+  }
+
   return (
-    <Button type="button" size="sm" disabled={isPending} onClick={send}>
-      {isPending ? 'Finalisation…' : 'Marquer comme envoyée'}
-    </Button>
+    <div className="flex items-center gap-2">
+      {pdfUrl && (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          nativeButton={false}
+          render={
+            <a href={pdfUrl} target="_blank" rel="noreferrer">
+              Télécharger le PDF
+            </a>
+          }
+        />
+      )}
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        disabled={isPending}
+        onClick={() => run(() => regenerateInvoicePdf(id), 'PDF régénéré.')}
+      >
+        {isPending ? 'Génération…' : 'Régénérer le PDF'}
+      </Button>
+    </div>
   )
 }
